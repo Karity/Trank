@@ -302,9 +302,9 @@ class Enemy(pygame.sprite.Sprite):
             print("Enemy being hit")
             rand_num = numpy.random.uniform(0, 100)
             item_no = 0
-            if rand_num >= 0 and rand_num <= 50:  # 有 6% 的几率掉落健康物品
+            if rand_num >= 0 and rand_num <= 5:  # 有 6% 的几率掉落健康物品
                 item_no = 1
-            elif rand_num > 50 and rand_num <= 150:  # 有 10% 的几率掉落硬币
+            elif rand_num > 5 and rand_num <= 15:  # 有 10% 的几率掉落硬币
                 item_no = 2
             if item_no != 0:
                 # Add Item to Items group
