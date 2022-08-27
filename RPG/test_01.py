@@ -113,8 +113,11 @@ class Player(pygame.sprite.Sprite):
         self.health = 5
         self.experiance = 0
         self.mana = 0  # 法力值
+        self.magic_cooldown = 1  # 火球冷却
 
     def move(self):
+        # 判断是否暂停
+        if cursor.wait == 1: return  # 如果 cursor.wait 变量的值为 1，则该函数不会运行。它只是简单地返回自己，不做任何事情。
         # Keep a constant acceleration of 0.5 in the downwards direction (gravity)
         self.acc = vec(0, 0.5)
         self.gravity_check()
@@ -165,6 +168,8 @@ class Player(pygame.sprite.Sprite):
             self.vel.y = -12
 
     def update(self):
+        # 判断是否暂停
+        if cursor.wait == 1: return  # 如果 cursor.wait 变量的值为 1，则该函数不会运行。它只是简单地返回自己，不做任何事情。
         # 一共6帧
         if self.move_frame > 6:  # “6”的原因是因为我们有7帧（我们从 0 开始）。
             self.move_frame = 0
@@ -187,6 +192,8 @@ class Player(pygame.sprite.Sprite):
                 self.image = run_ani_L[self.move_frame]
 
     def attack(self):
+        # 判断是否暂停
+        if cursor.wait == 1: return  # 如果 cursor.wait 变量的值为 1，则该函数不会运行。它只是简单地返回自己，不做任何事情。
         # while self.attack_frame < 10 and self.attacking:  # 执行所有攻击帧
         #     # 检查方向以显示正确的动画
         #     if self.direction == "RIGHT":
@@ -252,6 +259,39 @@ class HealthBar(pygame.sprite.Sprite):
         displaysurface.blit(self.image, (10, 10))
 
 
+class FireBall(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.direction = player.direction
+        if self.direction == "RIGHT":
+            self.image = pygame.image.load("fireball1_R.png")
+        else:
+            self.image = pygame.image.load("fireball1_L.png")
+        self.rect = self.image.get_rect(center=player.pos)
+        self.rect.x = player.pos.x
+        self.rect.y = player.pos.y - 40
+
+    def fire(self):
+        player.magic_cooldown = 0
+        # Runs while the fireball is still within the screen w/ extra margin
+        if -10 < self.rect.x < 710:
+            if self.direction == "RIGHT":
+                self.image = pygame.image.load("fireball1_R.png")
+                displaysurface.blit(self.image, self.rect)
+            else:
+                self.image = pygame.image.load("fireball1_L.png")
+                displaysurface.blit(self.image, self.rect)
+
+            if self.direction == "RIGHT":
+                self.rect.move_ip(12, 0)  # https://coderslegacy.com/python/pygame-rpg-magic-attacks/
+            else:
+                self.rect.move_ip(-12, 0)
+        else:
+            self.kill()
+            player.magic_cooldown = 1
+            player.attacking = False
+
+
 class Enemy(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
@@ -268,9 +308,12 @@ class Enemy(pygame.sprite.Sprite):
         if self.direction == 1:
             self.pos.x = 700
             self.pos.y = 235
-        self.mana = random.randint(1, 3)  # 杀死时获得的随机法力值
+        # self.mana = random.randint(1, 3)  # 杀死时获得的随机法力值
+        self.mana = 49  # 杀死时获得的随机法力值
 
     def move(self):
+        # 判断是否暂停
+        if cursor.wait == 1: return  # 如果 cursor.wait 变量的值为 1，则该函数不会运行。它只是简单地返回自己，不做任何事情。
         # 使敌人在到达屏幕末端时改变方向
         if self.pos.x >= (WIDTH - 20):
             self.direction = 1
@@ -291,9 +334,9 @@ class Enemy(pygame.sprite.Sprite):
         # Checks for collision with the Player
         hits = pygame.sprite.spritecollide(self, Playergroup, False)
         # Checks for collision with Fireballs
-        # f_hits = pygame.sprite.spritecollide(self, Fireballs, False)
+        f_hits = pygame.sprite.spritecollide(self, Fireballs, False)
         # Activates upon either of the two expressions being true
-        if hits and player.attacking == True:# or f_hits:
+        if hits and player.attacking == True or f_hits:
             if player.mana < 100:
                 player.mana += self.mana  # Release mana
             player.experiance += 1  # Release expeiriance
@@ -302,9 +345,9 @@ class Enemy(pygame.sprite.Sprite):
             print("Enemy being hit")
             rand_num = numpy.random.uniform(0, 100)
             item_no = 0
-            if rand_num >= 0 and rand_num <= 5:  # 有 6% 的几率掉落健康物品
+            if rand_num >= 0 and rand_num <= 50:  # 有 6% 的几率掉落健康物品
                 item_no = 1
-            elif rand_num > 5 and rand_num <= 15:  # 有 10% 的几率掉落硬币
+            elif rand_num > 50 and rand_num <= 150:  # 有 10% 的几率掉落硬币
                 item_no = 2
             if item_no != 0:
                 # Add Item to Items group
@@ -316,6 +359,127 @@ class Enemy(pygame.sprite.Sprite):
         # If collision has occured and player not attacking, call "hit" function
         elif hits and player.attacking == False:
             player.player_hit()
+
+
+class Enemy2(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.pos = vec(0, 0)
+        self.vel = vec(0, 0)
+        self.direction = random.randint(0, 1)  # 0 for Right, 1 for Left
+        self.vel.x = random.randint(2, 6) / 3  # Randomized velocity of the generated enemy
+        self.mana = random.randint(2, 3)  # Randomized mana amount obtained upon
+        self.wait = 0
+        self.wait_status = False
+        self.turning = 0
+
+        if self.direction == 0:
+            self.image = pygame.image.load("enemy2.png")
+        if self.direction == 1:
+            self.image = pygame.image.load("enemy2_L.png")
+        self.rect = self.image.get_rect()
+
+        # Sets the initial position of the enemy
+        if self.direction == 0:
+            self.pos.x = 0
+            self.pos.y = 250
+        if self.direction == 1:
+            self.pos.x = 700
+            self.pos.y = 250
+
+    def move(self):
+        # 判断是否暂停
+        if cursor.wait == 1: return  # 如果 cursor.wait 变量的值为 1，则该函数不会运行。它只是简单地返回自己，不做任何事情。
+        if self.turning == 1:
+            self.turn()
+            return
+        # 使敌人在到达屏幕末端时改变方向
+        if self.pos.x >= (WIDTH - 20):
+            self.direction = 1
+        elif self.pos.x <= 0:
+            self.direction = 0
+        # Updates position with new values
+        if self.wait > 50:
+            self.wait_status = True
+        elif int(self.wait) <= 0:
+            self.wait_status = False
+
+        if (self.direction_check()):
+            self.turn()
+            self.wait = 60  # 对于以 60 FPS 运行的游戏，将 self.wait 设置为 90 会使敌人在转身前暂停 1.5 秒。 （90 除以 60）。
+            self.turning = 1
+
+        if self.wait_status == True:  # 每50帧移动一次
+            self.wait -= 1
+
+        elif self.direction == 0:
+            self.pos.x += self.vel.x
+            self.wait += self.vel.x
+        elif self.direction == 1:
+            self.pos.x -= self.vel.x
+            self.wait += self.vel.x
+
+        self.rect.topleft = self.pos  # Updates rect
+
+    def turn(self):
+        '''
+        To summarise, the turn()function is called 90 times, as we set self.wait to 90, when we began the turn. However,
+        the turn is not executed until self.wait is back to 0. This prevents the enemy from turning around too quickly.
+        总而言之，turn() 函数被调用了 90 次，因为我们在开始转弯时将 self.wait 设置为 90。
+        但是，直到 self.wait 回到 0 时才会执行转弯。这可以防止敌人过快转身。
+
+        And keep in mind, that for a game running at 60 FPS, setting self.wait to 90 makes the enemy pause for 1.5 seconds,
+        before turning around. ( 90 divided by 60).
+        请记住，对于以 60 FPS 运行的游戏，将 self.wait 设置为 90 会使敌人在转身前暂停 1.5 秒。 （90 除以 60）。
+        '''
+        if self.wait > 0:
+            self.wait -= 1
+            return
+        elif int(self.wait) <= 0:
+            self.turning = 0
+        if (self.direction):
+            self.direction = 0
+            self.image = pygame.image.load("enemy2.png")
+        else:
+            self.direction = 1
+            self.image = pygame.image.load("enemy2_L.png")
+
+    def direction_check(self):  # 第一个是玩家是否在敌人身后，而敌人指向前方（这是第一个 if 语句）。第二个是如果玩家在敌人面前，但玩家指向后方。 （这是第二个如果）
+        if (player.pos.x - self.pos.x < 0 and self.direction == 0):
+            return 1
+        elif (player.pos.x - self.pos.x > 0 and self.direction == 1):
+            return 1
+        else:
+            return 0
+
+    def update(self):
+        # Checks for collision with the Player
+        hits = pygame.sprite.spritecollide(self, Playergroup, False)
+        # Checks for collision with Fireballs
+        f_hits = pygame.sprite.spritecollide(self, Fireballs, False)
+        # Activates upon either of the two expressions being true
+        if hits and player.attacking == True or f_hits:
+            self.kill()
+            handler.dead_enemy_count += 1
+            if player.mana < 100: player.mana += self.mana  # Release mana
+            player.experiance += 1  # Release expeiriance
+            rand_num = numpy.random.uniform(0, 100)
+            item_no = 0
+            if rand_num >= 0 and rand_num <= 5:  # 1 / 20 chance for an item (health) drop
+                item_no = 1
+            elif rand_num > 5 and rand_num <= 15:
+                item_no = 2
+            if item_no != 0:
+                # Add Item to Items group
+                item = Item(item_no)
+                Items.add(item)
+                # Sets the item location to the location of the killed enemy
+                item.posx = self.pos.x
+                item.posy = self.pos.y
+
+    def render(self):
+        # Displays the enemy on screen
+        displaysurface.blit(self.image, self.rect)
 
 
 # Building a Dungeon Entrance 建造地下城入口
@@ -337,7 +501,9 @@ class EventHandler():
         self.dead_enemy_count = 0
         self.battle = False
         self.enemy_generation = pygame.USEREVENT + 2
+        self.enemy_generation2 = pygame.USEREVENT + 3
         self.stage = 1
+        self.world = 0
 
         self.stage_enemies = []
         for x in range(1, 21):
@@ -363,27 +529,41 @@ class EventHandler():
 
     def world1(self):
         self.root.destroy()
+        self.world = 1
         pygame.time.set_timer(self.enemy_generation, 2000)
         print("Stage: " + str(self.stage))
         print('num of enemy:',handler.stage_enemies[handler.stage - 1])
+        button.imgdisp = 1
         castle.hide = True
         self.battle = True
         # stage_display.move_display()
 
     def world2(self):
+        self.root.destroy()
+        self.world = 2
+        background.bgimage = pygame.image.load("desert.jpg")
+        ground.image = pygame.image.load("desert_ground.png")
+        pygame.time.set_timer(self.enemy_generation2, 2500)
+        button.imgdisp = 1
+        castle.hide = True
         self.battle = True
-        # Empty for now
 
     def world3(self):
         self.battle = True
+        button.imgdisp = 1
         # Empty for now
 
     def next_stage(self):  # 下一个阶段被点击时的代码
+        button.imgdisp = 1
         self.stage += 1
         self.enemy_count = 0
         self.dead_enemy_count = 0
         print("Stage: " + str(self.stage))
-        pygame.time.set_timer(self.enemy_generation, 1500 - (50 * self.stage))  # 计算每个敌人生成间隔的公式
+        if self.world == 1:
+            pygame.time.set_timer(self.enemy_generation, 1500 - (50 * self.stage))  # 计算每个敌人生成间隔的公式
+        elif self.world == 2:
+            pygame.time.set_timer(self.enemy_generation2, 1500 - (50 * self.stage))  # 计算每个敌人生成间隔的公式
+        # pygame.time.set_timer(self.enemy_generation, 1500 - (50 * self.stage))  # 计算每个敌人生成间隔的公式
         print('num of enemy:',handler.stage_enemies[handler.stage - 1])
 
     def update(self):
@@ -391,6 +571,24 @@ class EventHandler():
             # self.dead_enemy_count = 0
             # stage_display.clear = True
             stage_display.stage_clear()
+
+    def home(self):
+        # Reset Battle code
+        pygame.time.set_timer(self.enemy_generation, 0)
+        pygame.time.set_timer(self.enemy_generation2, 0)
+        self.battle = False
+        self.enemy_count = 0
+        self.dead_enemy_count = 0
+        self.stage = 0
+        self.world = 0
+        # Destroy any enemies or items lying around
+        for group in Enemies, Items:
+            for entity in group:
+                entity.kill()
+        # Bring back normal backgrounds
+        castle.hide = False
+        background.bgimage = pygame.image.load("Background.png").convert_alpha()
+        ground.image = pygame.image.load("Ground.png").convert_alpha()
 
 
 class StageDisplay(pygame.sprite.Sprite):
@@ -417,6 +615,7 @@ class StageDisplay(pygame.sprite.Sprite):
 
     def stage_clear(self):
         self.text = headingfont.render("STAGE CLEAR!", True, color_dark)
+        button.imgdisp = 0
         if self.posx < 720:
             self.posx += 10
             displaysurface.blit(self.text, (self.posx, self.posy))
@@ -481,6 +680,64 @@ class Item(pygame.sprite.Sprite):
                 self.kill()
 
 
+class PButton(pygame.sprite.Sprite):  # 按钮类
+    def __init__(self):
+        super().__init__()
+        self.vec = vec(620, 300)
+        self.imgdisp = 0
+
+    def render(self, num):
+        if (num == 0):
+            self.image = pygame.image.load("home_small.png")
+        elif (num == 1):
+            if cursor.wait == 0:
+                self.image = pygame.image.load("pause_small.png")
+            else:
+                self.image = pygame.image.load("play_small.png")
+
+        displaysurface.blit(self.image, self.vec)
+
+
+class Cursor(pygame.sprite.Sprite):  # 光标类  https://coderslegacy.com/python/pygame-rpg-pause-button/
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.image.load("cursor.png")
+        self.rect = self.image.get_rect()
+        self.wait = 0
+
+    def pause(self):
+        if self.wait == 1:
+            self.wait = 0
+        else:
+            self.wait = 1
+
+    def hover(self):
+        if 620 <= mouse[0] <= 670 and 300 <= mouse[1] <= 345:
+            pygame.mouse.set_visible(False)
+            cursor.rect.center = pygame.mouse.get_pos()  # update position
+            displaysurface.blit(cursor.image, cursor.rect)
+        else:
+            pygame.mouse.set_visible(True)
+
+    def home(self):
+        # Reset Battle code
+        pygame.time.set_timer(self.enemy_generation, 0)
+        self.battle = False
+        self.enemy_count = 0
+        self.dead_enemy_count = 0
+        self.stage = 1
+
+        # Destroy any enemies or items lying around
+        for group in Enemies, Items:
+            for entity in group:
+                entity.kill()
+
+        # Bring back normal backgrounds
+        castle.hide = False
+        background.bgimage = pygame.image.load("Background.png")
+        ground.image = pygame.image.load("Ground.png")
+
+
 castle = Castle()
 handler = EventHandler()
 stage_display = StageDisplay()
@@ -499,9 +756,14 @@ Enemies = pygame.sprite.Group()
 # enemy = Enemy()
 status_bar = StatusBar()
 Items = pygame.sprite.Group()
+Fireballs = pygame.sprite.Group()
+
+button = PButton()
+cursor = Cursor()
 
 while True:
     # player.gravity_check()  # 或者在move()里面调用
+    mouse = pygame.mouse.get_pos()  # 获取鼠标的坐标(x, y)
     for event in pygame.event.get():
         # Will run when the close window button is clicked
         if event.type == QUIT:
@@ -512,12 +774,17 @@ while True:
             if player.attacking == False:
                 player.attacking = True
                 player.attack()
+            if 620 <= mouse[0] <= 670 and 300 <= mouse[1] <= 345:
+                if button.imgdisp == 1:
+                    cursor.pause()
+                elif button.imgdisp == 0:
+                    handler.home()
         # being hit
         if event.type == hit_cooldown:
             player.cooldown = False
             pygame.time.set_timer(hit_cooldown, 0)
         # Event handling for a range of different key presses
-        if event.type == pygame.KEYDOWN:
+        if event.type == pygame.KEYDOWN and cursor.wait == 0:
             if event.key == pygame.K_SPACE:  # 空格: 跳
                 player.jump()
             if event.key == pygame.K_e and 450 < player.rect.x < 550:  # e并且处于地下城入口: 选关
@@ -531,6 +798,12 @@ while True:
                     stage_display = StageDisplay()
                     stage_display.display = True
                     status_bar.show = True
+            if event.key == pygame.K_m and player.magic_cooldown == 1:  # m并且火球非冷却,有法力值: 发射火球
+                if player.mana >= 6:
+                    player.mana -= 6
+                    player.attacking = True
+                    fireball = FireBall()
+                    Fireballs.add(fireball)
         # 根据所处阶段生成敌人
         if event.type == handler.enemy_generation:
             if handler.enemy_count < handler.stage_enemies[handler.stage - 1]:
@@ -538,9 +811,17 @@ while True:
                 Enemies.add(enemy)
                 handler.enemy_count += 1
             # print('num of enemy:', len(Enemies))
+        if event.type == handler.enemy_generation2:
+            if handler.enemy_count < handler.stage_enemies[handler.stage - 1]:
+                enemy = Enemy2()
+                Enemies.add(enemy)
+                handler.enemy_count += 1
 
     background.render()
     ground.render()
+
+    button.render(button.imgdisp)
+    cursor.hover()
 
     castle.render()
     # Render stage display
@@ -567,6 +848,9 @@ while True:
     # enemy.render()
     # enemy.move()
     # enemy.update()
+
+    for ball in Fireballs:
+        ball.fire()
 
     for i in Items:
         i.render()
