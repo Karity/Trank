@@ -505,8 +505,6 @@ class Enemy2(pygame.sprite.Sprite):
             displaysurface.blit(self.image, self.rect)
 
 
-
-      
 class Enemy(pygame.sprite.Sprite):
       def __init__(self):
         super().__init__()

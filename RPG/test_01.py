@@ -4,6 +4,7 @@ import sys
 import random, time
 from tkinter import filedialog
 from tkinter import *
+import numpy
 
 pygame.init()  # Begin pygame
 
@@ -19,6 +20,17 @@ COUNT = 0
 
 displaysurface = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Game")
+
+# light shade of the button
+color_light = (170, 170, 170)
+color_dark = (100, 100, 100)
+color_white = (255, 255, 255)
+
+# defining a font
+headingfont = pygame.font.SysFont("Verdana", 40)
+regularfont = pygame.font.SysFont('Corbel', 25)
+smallerfont = pygame.font.SysFont('Corbel', 16)
+text = regularfont.render('LOAD', True, color_light)
 
 
 class Background(pygame.sprite.Sprite):
@@ -96,10 +108,11 @@ class Player(pygame.sprite.Sprite):
         self.move_frame = 0  # 正在显示的角色的当前帧
         # Combat
         self.attacking = False
-        self.attack_frame = 0
+        self.attack_frame = 0  # 战斗帧
         self.cooldown = False  # 冷却
-
         self.health = 5
+        self.experiance = 0
+        self.mana = 0  # 法力值
 
     def move(self):
         # Keep a constant acceleration of 0.5 in the downwards direction (gravity)
@@ -255,6 +268,7 @@ class Enemy(pygame.sprite.Sprite):
         if self.direction == 1:
             self.pos.x = 700
             self.pos.y = 235
+        self.mana = random.randint(1, 3)  # 杀死时获得的随机法力值
 
     def move(self):
         # 使敌人在到达屏幕末端时改变方向
@@ -276,11 +290,29 @@ class Enemy(pygame.sprite.Sprite):
     def update(self):
         # Checks for collision with the Player
         hits = pygame.sprite.spritecollide(self, Playergroup, False)
+        # Checks for collision with Fireballs
+        # f_hits = pygame.sprite.spritecollide(self, Fireballs, False)
         # Activates upon either of the two expressions being true
-        if hits and player.attacking == True:
+        if hits and player.attacking == True:# or f_hits:
+            if player.mana < 100:
+                player.mana += self.mana  # Release mana
+            player.experiance += 1  # Release expeiriance
             self.kill()
+            handler.dead_enemy_count += 1
             print("Enemy being hit")
-
+            rand_num = numpy.random.uniform(0, 100)
+            item_no = 0
+            if rand_num >= 0 and rand_num <= 50:  # 有 6% 的几率掉落健康物品
+                item_no = 1
+            elif rand_num > 50 and rand_num <= 150:  # 有 10% 的几率掉落硬币
+                item_no = 2
+            if item_no != 0:
+                # Add Item to Items group
+                item = Item(item_no)
+                Items.add(item)
+                # Sets the item location to the location of the killed enemy
+                item.posx = self.pos.x
+                item.posy = self.pos.y
         # If collision has occured and player not attacking, call "hit" function
         elif hits and player.attacking == False:
             player.player_hit()
@@ -302,6 +334,7 @@ class Castle(pygame.sprite.Sprite):
 class EventHandler():
     def __init__(self):
         self.enemy_count = 0
+        self.dead_enemy_count = 0
         self.battle = False
         self.enemy_generation = pygame.USEREVENT + 2
         self.stage = 1
@@ -335,6 +368,7 @@ class EventHandler():
         print('num of enemy:',handler.stage_enemies[handler.stage - 1])
         castle.hide = True
         self.battle = True
+        # stage_display.move_display()
 
     def world2(self):
         self.battle = True
@@ -347,13 +381,109 @@ class EventHandler():
     def next_stage(self):  # 下一个阶段被点击时的代码
         self.stage += 1
         self.enemy_count = 0
+        self.dead_enemy_count = 0
         print("Stage: " + str(self.stage))
         pygame.time.set_timer(self.enemy_generation, 1500 - (50 * self.stage))  # 计算每个敌人生成间隔的公式
         print('num of enemy:',handler.stage_enemies[handler.stage - 1])
 
+    def update(self):
+        if self.dead_enemy_count == self.stage_enemies[self.stage - 1] and stage_display.clear == False:
+            # self.dead_enemy_count = 0
+            # stage_display.clear = True
+            stage_display.stage_clear()
+
+
+class StageDisplay(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.text = headingfont.render("STAGE: " + str(handler.stage), True, color_dark)
+        self.rect = self.text.get_rect()
+        self.posx = -100
+        self.posy = 100
+        self.display = False
+        self.clear = False
+
+    def move_display(self):
+        # Create the text to be displayed
+        self.text = headingfont.render("STAGE: " + str(handler.stage) + '\nEnemy:' + str(handler.stage_enemies[handler.stage - 1]), True, color_dark)
+        if self.posx < 720:
+            self.posx += 5
+            displaysurface.blit(self.text, (self.posx, self.posy))
+        else:
+            self.display = False
+            # self.kill()
+            self.posx = -100  # 我们不希望它被杀死。因此，我们只需将其重置为屏幕左侧的某个位置，它将等待下一个命令。
+            self.posy = 100
+
+    def stage_clear(self):
+        self.text = headingfont.render("STAGE CLEAR!", True, color_dark)
+        if self.posx < 720:
+            self.posx += 10
+            displaysurface.blit(self.text, (self.posx, self.posy))
+        else:
+            self.clear = True
+            self.posx = -100
+            self.posy = 100
+
+
+class StatusBar(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.surf = pygame.Surface((100, 95))
+        self.rect = self.surf.get_rect(center=(505, 10))
+        self.show = False
+
+    def update_draw(self):
+        # Create the text to be displayed
+        text1 = smallerfont.render("STAGE: " + str(handler.stage), True, color_white)
+        text2 = smallerfont.render("Enemy: " + str(handler.stage_enemies[handler.stage - 1]), True, color_white)
+        text3 = smallerfont.render("Enemy extra: " + str(handler.stage_enemies[handler.stage - 1] - handler.dead_enemy_count), True, color_white)
+        text4 = smallerfont.render("EXP: " + str(player.experiance), True, color_white)
+        text5 = smallerfont.render("MANA: " + str(player.mana), True, color_white)
+        text6 = smallerfont.render("FPS: " + str(int(FPS_CLOCK.get_fps())), True, color_white)  # 获取帧数
+
+        # Draw the text to the status bar
+        displaysurface.blit(text1, (585, 7))
+        displaysurface.blit(text2, (585, 22))
+        displaysurface.blit(text3, (585, 37))
+        displaysurface.blit(text4, (585, 52))
+        displaysurface.blit(text5, (585, 67))
+        displaysurface.blit(text6, (585, 82))
+
+
+class Item(pygame.sprite.Sprite):
+    def __init__(self, itemtype):
+        super().__init__()
+        if itemtype == 1:
+            self.image = pygame.image.load("heart.png")
+        elif itemtype == 2:
+            self.image = pygame.image.load("coin.png")
+        self.rect = self.image.get_rect()
+        self.type = itemtype
+        self.posx = 0
+        self.posy = 0
+
+    def render(self):
+        self.rect.x = self.posx
+        self.rect.y = self.posy
+        displaysurface.blit(self.image, self.rect)
+
+    def update(self):
+        hits = pygame.sprite.spritecollide(self, Playergroup, False)
+        # Code to be activated if item comes in contact with player
+        if hits:
+            if player.health < 5 and self.type == 1:
+                player.health += 1
+                health.image = health_ani[player.health]
+                self.kill()
+            if self.type == 2:
+                # handler.money += 1
+                self.kill()
+
 
 castle = Castle()
 handler = EventHandler()
+stage_display = StageDisplay()
 
 hit_cooldown = pygame.USEREVENT + 1
 
@@ -367,7 +497,8 @@ Playergroup.add(player)
 health = HealthBar()
 Enemies = pygame.sprite.Group()
 # enemy = Enemy()
-
+status_bar = StatusBar()
+Items = pygame.sprite.Group()
 
 while True:
     # player.gravity_check()  # 或者在move()里面调用
@@ -391,9 +522,15 @@ while True:
                 player.jump()
             if event.key == pygame.K_e and 450 < player.rect.x < 550:  # e并且处于地下城入口: 选关
                 handler.stage_handler()
+                stage_display = StageDisplay()
+                stage_display.display = True
+                status_bar.show = True
             if event.key == pygame.K_n:
                 if handler.battle == True and len(Enemies) == 0:  # n并且在关卡中并且没有敌人: 下一关
                     handler.next_stage()
+                    stage_display = StageDisplay()
+                    stage_display.display = True
+                    status_bar.show = True
         # 根据所处阶段生成敌人
         if event.type == handler.enemy_generation:
             if handler.enemy_count < handler.stage_enemies[handler.stage - 1]:
@@ -406,11 +543,22 @@ while True:
     ground.render()
 
     castle.render()
+    # Render stage display
+    if stage_display.display == True:
+        stage_display.move_display()
+    # if stage_display.clear == True:
+    #     stage_display.stage_clear()
 
     if player.health > 0:
         displaysurface.blit(player.image, player.rect)
     health.render()
     player.update()
+
+    if status_bar.show:
+        # Status bar update and render
+        displaysurface.blit(status_bar.surf, (580, 5))
+        status_bar.update_draw()
+        handler.update()
 
     for entity in Enemies:
         entity.update()
@@ -419,6 +567,10 @@ while True:
     # enemy.render()
     # enemy.move()
     # enemy.update()
+
+    for i in Items:
+        i.render()
+        i.update()
 
     if player.attacking == True:  # 确保所有的攻击帧都能执行完毕
         player.attack()
